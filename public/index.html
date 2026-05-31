@@ -9,7 +9,17 @@
     body { font-family: system-ui, sans-serif; background: #F3F4F6; min-height: 100vh; padding: 32px 16px; }
 
     h1 { text-align: center; font-size: 1.6rem; font-weight: 700; color: #111; margin-bottom: 4px; }
-    .sub { text-align: center; color: #666; font-size: 0.9rem; margin-bottom: 32px; }
+    .sub { text-align: center; color: #666; font-size: 0.9rem; margin-bottom: 24px; }
+
+    .mode-tabs { display: flex; gap: 8px; justify-content: center; margin-bottom: 28px; }
+    .mode-tab {
+      padding: 10px 28px; border-radius: 99px;
+      border: 2px solid #e5e7eb; background: #fff;
+      font-size: 0.95rem; font-weight: 700; color: #555;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .mode-tab:hover { border-color: #6366f1; color: #6366f1; }
+    .mode-tab.active { border-color: #111; background: #111; color: #fff; }
 
     .container { max-width: 860px; margin: 0 auto; }
 
@@ -92,6 +102,50 @@
     .btn-retry:hover { border-color: #6366f1; color: #6366f1; }
     .btn-retry:disabled { opacity: 0.45; cursor: not-allowed; }
 
+    /* Seção modelo */
+    .section-title { font-size: 1rem; font-weight: 700; color: #111; margin-bottom: 4px; }
+    .section-sub { color: #666; font-size: 0.85rem; margin-bottom: 20px; }
+    .section-label { font-size: 0.75rem; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+
+    .model-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
+    .model-thumb {
+      width: 90px; cursor: pointer;
+      border-radius: 10px; border: 2.5px solid #e5e7eb;
+      overflow: hidden; transition: border-color 0.15s, box-shadow 0.15s;
+      background: #f9fafb;
+    }
+    .model-thumb:hover { border-color: #6366f1; }
+    .model-thumb.selected { border-color: #6366f1; box-shadow: 0 0 0 3px #e0e7ff; }
+    .model-thumb img { width: 100%; aspect-ratio: 3/4; object-fit: cover; display: block; }
+    .model-thumb span {
+      display: block; font-size: 0.7rem; font-weight: 600; color: #555;
+      text-align: center; padding: 4px 4px 6px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .model-thumb.selected span { color: #6366f1; }
+    .empty-models { color: #aaa; font-size: 0.85rem; padding: 4px 0 16px; }
+
+    .pose-toggle { display: flex; gap: 6px; }
+    .pose-btn {
+      padding: 6px 14px; border: 2px solid #e5e7eb; border-radius: 8px;
+      background: #fff; color: #555; font-size: 0.82rem; font-weight: 600;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .pose-btn:hover { border-color: #6366f1; color: #6366f1; }
+    .pose-btn.active { border-color: #6366f1; background: #6366f1; color: #fff; }
+    .model-thumb.no-pose { opacity: 0.35; pointer-events: none; }
+
+    .mini-upload-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+    .mini-upload {
+      border: 2px dashed #d1d5db; border-radius: 10px;
+      padding: 14px 10px; text-align: center; cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      font-size: 0.82rem; color: #888; font-weight: 500;
+    }
+    .mini-upload:hover { border-color: #6366f1; background: #f5f3ff; color: #6366f1; }
+    .mini-upload.has-file { border-color: #22c55e; background: #f0fdf4; color: #16a34a; }
+    .mini-upload input { display: none; }
+
     /* Spinner */
     .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 8px; }
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -100,11 +154,17 @@
 <body>
 
 <h1>Vyser</h1>
-<p class="sub">Envie fotos de um óculos → gera frente, inclinado e lado padronizados automaticamente</p>
+<p class="sub">Padronizador de fotos de óculos</p>
 
 <div class="container">
 
+  <div class="mode-tabs">
+    <button class="mode-tab active" onclick="setMode('oculos')">🕶️ Óculos</button>
+    <button class="mode-tab" onclick="setMode('modelo')">📸 Modelo</button>
+  </div>
+
   <!-- Upload -->
+  <div id="section-oculos">
   <div class="upload-card">
     <div class="upload-area" onclick="document.getElementById('file-input').click()">
       <input type="file" id="file-input" accept="image/*" multiple onchange="handleFiles(this.files)" />
@@ -118,11 +178,51 @@
     <button class="btn-generate" id="btn-generate" onclick="generate()" disabled>
       Gerar frente, inclinado e lado padronizados
     </button>
-    <button class="btn-secondary" id="btn-sombra" onclick="gerarPngSombra()" disabled>
-      🖼️ Gerar PNG com fundo transparente + sombra
-    </button>
     <div class="status" id="status"></div>
   </div>
+
+  </div><!-- /section-oculos -->
+
+  <div id="section-modelo" style="display:none;">
+  <!-- Gerar com Modelo -->
+  <div class="upload-card">
+    <p class="section-title">📸 Gerar com Modelo</p>
+    <p class="section-sub">Selecione o modelo, anexe os óculos e a roupa — e gere a foto</p>
+
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+      <p class="section-label" style="margin-bottom:0;">Modelo</p>
+      <div class="pose-toggle" style="margin-bottom:0;">
+        <button class="pose-btn active" id="pose-frente" onclick="selectPose('frente')">De Frente</button>
+        <button class="pose-btn" id="pose-ladinho" onclick="selectPose('ladinho')">De Ladinho</button>
+      </div>
+    </div>
+    <div class="model-grid" id="model-grid">
+      <span class="empty-models">Nenhum modelo encontrado — adicione fotos em public/models/</span>
+    </div>
+
+    <div class="mini-upload-row">
+      <div>
+        <p class="section-label">Óculos</p>
+        <div class="mini-upload" id="upload-glasses" onclick="document.getElementById('input-glasses').click()">
+          <input type="file" id="input-glasses" accept="image/*" onchange="handleModelFile('glasses', this.files[0])" />
+          📎 Anexar foto dos óculos
+        </div>
+      </div>
+      <div>
+        <p class="section-label">Roupa</p>
+        <div class="mini-upload" id="upload-clothing" onclick="document.getElementById('input-clothing').click()">
+          <input type="file" id="input-clothing" accept="image/*" onchange="handleModelFile('clothing', this.files[0])" />
+          👕 Anexar foto da roupa
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-generate" id="btn-model" onclick="gerarComModelo()" disabled>
+      📸 Gerar foto com modelo
+    </button>
+    <div class="status" id="status-model"></div>
+  </div>
+  </div><!-- /section-modelo -->
 
   <!-- Resultados -->
   <div id="results-list"></div>
@@ -130,14 +230,20 @@
 </div>
 
 <script>
+  function setMode(mode) {
+    document.getElementById('section-oculos').style.display = mode === 'oculos' ? '' : 'none';
+    document.getElementById('section-modelo').style.display = mode === 'modelo' ? '' : 'none';
+    document.querySelectorAll('.mode-tab').forEach((t, i) => {
+      t.classList.toggle('active', (i === 0 && mode === 'oculos') || (i === 1 && mode === 'modelo'));
+    });
+  }
+
   let selectedFiles = [];
 
   function handleFiles(files) {
     for (const f of files) selectedFiles.push(f);
     renderThumbs();
-    const hasFiles = selectedFiles.length > 0;
-    document.getElementById('btn-generate').disabled = !hasFiles;
-    document.getElementById('btn-sombra').disabled   = !hasFiles;
+    document.getElementById('btn-generate').disabled = selectedFiles.length === 0;
   }
 
   function renderThumbs() {
@@ -155,9 +261,7 @@
       div.appendChild(btn);
       container.appendChild(div);
     });
-    const hasFiles = selectedFiles.length > 0;
-    document.getElementById('btn-generate').disabled = !hasFiles;
-    document.getElementById('btn-sombra').disabled   = !hasFiles;
+    document.getElementById('btn-generate').disabled = selectedFiles.length === 0;
   }
 
   async function generate() {
@@ -242,18 +346,95 @@
     }
   }
 
-  async function gerarPngSombra() {
-    if (selectedFiles.length === 0) return;
-    const btn    = document.getElementById('btn-sombra');
-    const status = document.getElementById('status');
+  // ── Seção Gerar com Modelo ──────────────────────────────
+  let selectedModel     = null; // objeto { name, frente, ladinho }
+  let selectedPose      = 'frente';
+  let modelGlassesFile  = null;
+  let modelClothingFile = null;
+  let allModels         = [];
+
+  function selectPose(pose) {
+    selectedPose = pose;
+    document.getElementById('pose-frente').classList.toggle('active', pose === 'frente');
+    document.getElementById('pose-ladinho').classList.toggle('active', pose === 'ladinho');
+    renderModelGrid();
+  }
+
+  async function loadModels() {
+    const res = await fetch('/api/models');
+    allModels = await res.json();
+    renderModelGrid();
+  }
+
+  function renderModelGrid() {
+    const grid = document.getElementById('model-grid');
+    if (!allModels.length) {
+      grid.innerHTML = '<span class="empty-models">Nenhum modelo encontrado — adicione fotos em public/models/</span>';
+      return;
+    }
+    grid.innerHTML = '';
+    allModels.forEach(m => {
+      const hasFile = selectedPose === 'ladinho' ? !!m.ladinho : !!m.frente;
+      const previewFile = m.frente || m.ladinho;
+      const div = document.createElement('div');
+      div.className = 'model-thumb' + (!hasFile ? ' no-pose' : '');
+      div.innerHTML = `<img src="/models/${previewFile}" alt="${m.name}" /><span>${m.name}</span>`;
+      if (hasFile) {
+        div.onclick = () => {
+          document.querySelectorAll('.model-thumb').forEach(el => el.classList.remove('selected'));
+          div.classList.add('selected');
+          selectedModel = m;
+          updateModelBtn();
+        };
+      }
+      // mantém seleção se já estava selecionado
+      if (selectedModel && selectedModel.name === m.name && hasFile) {
+        div.classList.add('selected');
+      }
+      grid.appendChild(div);
+    });
+  }
+
+  function handleModelFile(type, file) {
+    if (!file) return;
+    if (type === 'glasses') {
+      modelGlassesFile = file;
+      const el = document.getElementById('upload-glasses');
+      el.classList.add('has-file');
+      el.textContent = '✅ ' + file.name;
+    } else {
+      modelClothingFile = file;
+      const el = document.getElementById('upload-clothing');
+      el.classList.add('has-file');
+      el.textContent = '✅ ' + file.name;
+    }
+    updateModelBtn();
+  }
+
+  function updateModelBtn() {
+    const modelFile = selectedModel
+      ? (selectedPose === 'ladinho' ? selectedModel.ladinho : selectedModel.frente)
+      : null;
+    document.getElementById('btn-model').disabled =
+      !(modelFile && modelGlassesFile && modelClothingFile);
+  }
+
+  async function gerarComModelo() {
+    const btn    = document.getElementById('btn-model');
+    const status = document.getElementById('status-model');
     btn.disabled = true;
     status.className = 'status';
-    status.innerHTML = '<span class="spinner"></span> Removendo fundo e adicionando sombra...';
+    status.innerHTML = '<span class="spinner"></span> Gerando foto com modelo... pode levar 30-60s';
 
     try {
+      const modelFile = selectedPose === 'ladinho' ? selectedModel.ladinho : selectedModel.frente;
       const form = new FormData();
-      form.append('image', selectedFiles[0]);
-      const res  = await fetch('/api/png-sombra', { method: 'POST', body: form });
+      form.append('modelFile', modelFile);
+      form.append('pose',     selectedPose);
+      form.append('glasses',  modelGlassesFile);
+      form.append('clothing', modelClothingFile);
+
+      const res  = await fetch('/api/generate-model', { method: 'POST', body: form });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
 
@@ -263,26 +444,31 @@
       const wrap = document.createElement('div');
       wrap.className = 'result-single';
       wrap.innerHTML = `
-        <div class="result-row-label">PNG com sombra</div>
+        <div class="result-row-label">Modelo — ${selectedModel.name} (${selectedPose})</div>
         <div class="results-grid results-grid--single">
-          <div class="result-card" style="background: repeating-conic-gradient(#ccc 0% 25%, #fff 0% 50%) 0 0 / 16px 16px;">
-            <h3 style="background:#fff;border-radius:6px;padding:2px 8px;display:inline-block;">Transparente + sombra</h3>
-            <img src="${src}" alt="PNG sombra ${n}" style="background:transparent;" />
+          <div class="result-card">
+            <h3>Foto com Modelo</h3>
+            <img src="${src}" alt="Modelo ${n}" />
             <div class="card-actions">
-              <a href="${src}" download="vyser-sombra-${n}.png">⬇ Baixar PNG</a>
+              <a href="${src}" download="vyser-modelo-${n}.png">⬇ Baixar</a>
+              <button class="btn-retry" onclick="gerarComModelo()">↺ Gerar de novo</button>
             </div>
           </div>
         </div>`;
       document.getElementById('results-list').prepend(wrap);
       wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      status.textContent = '✅ PNG pronto!';
+      status.textContent = '✅ Pronto!';
     } catch(e) {
       status.className = 'status error';
       status.textContent = '❌ Erro: ' + e.message;
     } finally {
       btn.disabled = false;
+      updateModelBtn();
     }
   }
+
+  loadModels();
+  // ────────────────────────────────────────────────────────
 
   async function callGenerate(files, view) {
     const form = new FormData();
