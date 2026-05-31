@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vyser — Padronizador de Fotos</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #F3F4F6; min-height: 100vh; padding: 32px 16px; }
+
+    h1 { text-align: center; font-size: 1.6rem; font-weight: 700; color: #111; margin-bottom: 4px; }
+    .sub { text-align: center; color: #666; font-size: 0.9rem; margin-bottom: 32px; }
+
+    .container { max-width: 860px; margin: 0 auto; }
+
+    /* Upload */
+    .upload-card { background: #fff; border-radius: 16px; padding: 28px; box-shadow: 0 2px 12px rgba(0,0,0,0.07); margin-bottom: 24px; }
+    .upload-area {
+      border: 2px dashed #d1d5db;
+      border-radius: 12px;
+      padding: 32px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .upload-area:hover { border-color: #6366f1; background: #f5f3ff; }
+    .upload-area input { display: none; }
+    .upload-area .icon { font-size: 2.5rem; margin-bottom: 8px; }
+    .upload-area p { color: #555; font-size: 0.9rem; }
+    .upload-area span { color: #888; font-size: 0.8rem; }
+
+    /* Thumbnails dos uploads */
+    .thumbs { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+    .thumb { position: relative; width: 80px; height: 80px; border-radius: 8px; overflow: hidden; border: 2px solid #e5e7eb; }
+    .thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .thumb button {
+      position: absolute; top: 2px; right: 2px;
+      background: rgba(0,0,0,0.6); color: #fff;
+      border: none; border-radius: 50%; width: 18px; height: 18px;
+      font-size: 10px; cursor: pointer; line-height: 18px; padding: 0;
+    }
+
+    /* Botão gerar */
+    .btn-generate {
+      width: 100%; padding: 14px;
+      background: #111; color: #fff;
+      border: none; border-radius: 12px;
+      font-size: 1rem; font-weight: 700;
+      cursor: pointer; margin-top: 16px;
+      transition: opacity 0.2s;
+    }
+    .btn-generate:hover { opacity: 0.85; }
+    .btn-generate:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    .btn-secondary {
+      width: 100%; padding: 12px;
+      background: #fff; color: #111;
+      border: 2px solid #d1d5db; border-radius: 12px;
+      font-size: 0.9rem; font-weight: 600;
+      cursor: pointer; margin-top: 10px;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .btn-secondary:hover { border-color: #6366f1; color: #6366f1; }
+    .btn-secondary:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    .status { text-align: center; color: #666; font-size: 0.85rem; margin-top: 12px; min-height: 20px; }
+    .status.error { color: #ef4444; }
+
+    /* Resultados */
+    .results { display: none; }
+    .results h2 { font-size: 1rem; font-weight: 600; color: #333; margin-bottom: 16px; }
+    .results-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+
+    .result-card { background: #fff; border-radius: 16px; padding: 20px; box-shadow: 0 2px 12px rgba(0,0,0,0.07); text-align: center; }
+    .result-card h3 { font-size: 0.85rem; font-weight: 600; color: #555; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .result-card img { width: 100%; border-radius: 10px; aspect-ratio: 1; object-fit: contain; background: #F3F4F6; border: 1px solid #e5e7eb; }
+
+    /* Linhas de resultado */
+    .result-row, .result-single { margin-bottom: 32px; }
+    .result-row-label { font-size: 0.8rem; font-weight: 600; color: #999; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; }
+    .results-grid--single { grid-template-columns: 1fr; max-width: 340px; }
+
+    /* Ações do card */
+    .card-actions { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 12px; }
+    .card-actions a { color: #6366f1; font-size: 0.85rem; font-weight: 600; text-decoration: none; }
+    .card-actions a:hover { text-decoration: underline; }
+    .btn-retry {
+      background: none; border: 1.5px solid #d1d5db; border-radius: 8px;
+      padding: 5px 12px; font-size: 0.82rem; font-weight: 600; color: #555;
+      cursor: pointer; transition: border-color 0.15s, color 0.15s;
+    }
+    .btn-retry:hover { border-color: #6366f1; color: #6366f1; }
+    .btn-retry:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    /* Spinner */
+    .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 8px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<h1>Vyser</h1>
+<p class="sub">Envie fotos de um óculos → gera frente, inclinado e lado padronizados automaticamente</p>
+
+<div class="container">
+
+  <!-- Upload -->
+  <div class="upload-card">
+    <div class="upload-area" onclick="document.getElementById('file-input').click()">
+      <input type="file" id="file-input" accept="image/*" multiple onchange="handleFiles(this.files)" />
+      <div class="icon">🕶️</div>
+      <p><strong>Clique para enviar fotos do óculos</strong></p>
+      <span>Pode enviar várias fotos do mesmo modelo — todas serão usadas como referência</span>
+    </div>
+
+    <div class="thumbs" id="thumbs"></div>
+
+    <button class="btn-generate" id="btn-generate" onclick="generate()" disabled>
+      Gerar frente, inclinado e lado padronizados
+    </button>
+    <button class="btn-secondary" id="btn-sombra" onclick="gerarPngSombra()" disabled>
+      🖼️ Gerar PNG com fundo transparente + sombra
+    </button>
+    <div class="status" id="status"></div>
+  </div>
+
+  <!-- Resultados -->
+  <div id="results-list"></div>
+
+</div>
+
+<script>
+  let selectedFiles = [];
+
+  function handleFiles(files) {
+    for (const f of files) selectedFiles.push(f);
+    renderThumbs();
+    const hasFiles = selectedFiles.length > 0;
+    document.getElementById('btn-generate').disabled = !hasFiles;
+    document.getElementById('btn-sombra').disabled   = !hasFiles;
+  }
+
+  function renderThumbs() {
+    const container = document.getElementById('thumbs');
+    container.innerHTML = '';
+    selectedFiles.forEach((f, i) => {
+      const div = document.createElement('div');
+      div.className = 'thumb';
+      const img = document.createElement('img');
+      img.src = URL.createObjectURL(f);
+      const btn = document.createElement('button');
+      btn.textContent = '×';
+      btn.onclick = (e) => { e.stopPropagation(); selectedFiles.splice(i, 1); renderThumbs(); document.getElementById('btn-generate').disabled = selectedFiles.length === 0; };
+      div.appendChild(img);
+      div.appendChild(btn);
+      container.appendChild(div);
+    });
+    const hasFiles = selectedFiles.length > 0;
+    document.getElementById('btn-generate').disabled = !hasFiles;
+    document.getElementById('btn-sombra').disabled   = !hasFiles;
+  }
+
+  async function generate() {
+    if (selectedFiles.length === 0) return;
+
+    const btn = document.getElementById('btn-generate');
+    const status = document.getElementById('status');
+
+    btn.disabled = true;
+    status.className = 'status';
+    status.innerHTML = '<span class="spinner"></span> Gerando frente, inclinado e lado... pode levar 30-60 segundos';
+
+    try {
+      const [frente, inclinado, lado] = await Promise.all([
+        callGenerate(selectedFiles, 'frente'),
+        callGenerate(selectedFiles, 'inclinado'),
+        callGenerate(selectedFiles, 'lado'),
+      ]);
+
+      const srcFrente    = 'data:image/png;base64,' + frente;
+      const srcInclinado = 'data:image/png;base64,' + inclinado;
+      const srcLado      = 'data:image/png;base64,' + lado;
+
+      const n = document.querySelectorAll('.result-row').length + 1;
+      const row = document.createElement('div');
+      row.className = 'result-row';
+      row.innerHTML = `
+        <div class="result-row-label">Geração ${n}</div>
+        <div class="results-grid">
+          ${makeCard(srcFrente,    'Vista Frontal',    n, 'frente')}
+          ${makeCard(srcInclinado, 'Vista Inclinada',  n, 'inclinado')}
+          ${makeCard(srcLado,      'Vista Lateral',    n, 'lado')}
+        </div>`;
+      document.getElementById('results-list').prepend(row);
+      row.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      status.textContent = '✅ Pronto!';
+    } catch (e) {
+      status.className = 'status error';
+      status.textContent = '❌ Erro: ' + e.message;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function makeCard(src, title, n, view) {
+    const dl = `vyser-${view}-${n}.png`;
+    return `
+      <div class="result-card">
+        <h3>${title}</h3>
+        <img src="${src}" alt="${title}" />
+        <div class="card-actions">
+          <a href="${src}" download="${dl}">⬇ Baixar</a>
+          <button class="btn-retry" onclick="retrySingle(this, '${view}')">↺ Gerar de novo</button>
+        </div>
+      </div>`;
+  }
+
+  async function retrySingle(btn, view) {
+    if (selectedFiles.length === 0) { alert('Selecione as imagens primeiro.'); return; }
+    btn.disabled = true;
+    btn.textContent = '⏳ Gerando...';
+    try {
+      const result = await callGenerate(selectedFiles, view);
+      const src = 'data:image/png;base64,' + result;
+      const title = view === 'frente' ? 'Vista Frontal' : view === 'inclinado' ? 'Vista Inclinada' : 'Vista Lateral';
+      const n = document.querySelectorAll('.result-row, .result-single').length + 1;
+
+      const wrap = document.createElement('div');
+      wrap.className = 'result-single';
+      wrap.innerHTML = `
+        <div class="result-row-label">Retry — ${title}</div>
+        <div class="results-grid results-grid--single">
+          ${makeCard(src, title, n, view)}
+        </div>`;
+      document.getElementById('results-list').prepend(wrap);
+      wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch(e) {
+      alert('Erro: ' + e.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '↺ Gerar de novo';
+    }
+  }
+
+  async function gerarPngSombra() {
+    if (selectedFiles.length === 0) return;
+    const btn    = document.getElementById('btn-sombra');
+    const status = document.getElementById('status');
+    btn.disabled = true;
+    status.className = 'status';
+    status.innerHTML = '<span class="spinner"></span> Removendo fundo e adicionando sombra...';
+
+    try {
+      const form = new FormData();
+      form.append('image', selectedFiles[0]);
+      const res  = await fetch('/api/png-sombra', { method: 'POST', body: form });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      const src = 'data:image/png;base64,' + data.image;
+      const n   = document.querySelectorAll('.result-row, .result-single').length + 1;
+
+      const wrap = document.createElement('div');
+      wrap.className = 'result-single';
+      wrap.innerHTML = `
+        <div class="result-row-label">PNG com sombra</div>
+        <div class="results-grid results-grid--single">
+          <div class="result-card" style="background: repeating-conic-gradient(#ccc 0% 25%, #fff 0% 50%) 0 0 / 16px 16px;">
+            <h3 style="background:#fff;border-radius:6px;padding:2px 8px;display:inline-block;">Transparente + sombra</h3>
+            <img src="${src}" alt="PNG sombra ${n}" style="background:transparent;" />
+            <div class="card-actions">
+              <a href="${src}" download="vyser-sombra-${n}.png">⬇ Baixar PNG</a>
+            </div>
+          </div>
+        </div>`;
+      document.getElementById('results-list').prepend(wrap);
+      wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      status.textContent = '✅ PNG pronto!';
+    } catch(e) {
+      status.className = 'status error';
+      status.textContent = '❌ Erro: ' + e.message;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function callGenerate(files, view) {
+    const form = new FormData();
+    for (const f of files) form.append('images', f);
+    form.append('view', view);
+    const res = await fetch('/api/generate', { method: 'POST', body: form });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    return data.image;
+  }
+</script>
+
+</body>
+</html>
