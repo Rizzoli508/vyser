@@ -314,8 +314,8 @@ app.post('/api/generate-model', modelUpload.fields([
     const b64 = response.data[0].b64_json;
     if (!b64) throw new Error('OpenAI não retornou imagem.');
 
-    const corrected = await correctBackground(Buffer.from(b64, 'base64'));
-    res.json({ image: corrected.toString('base64') });
+    // Não aplica correção de fundo — foto com modelo tem muitos detalhes e o offset distorce as cores
+    res.json({ image: b64 });
   } catch (err) {
     uploadedPaths.forEach(p => { try { if (fs.existsSync(p)) fs.unlinkSync(p); } catch {} });
     console.error(err);
