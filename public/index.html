@@ -135,6 +135,26 @@
     .pose-btn.active { border-color: #6366f1; background: #6366f1; color: #fff; }
     .model-thumb.no-pose { opacity: 0.35; pointer-events: none; }
 
+    .expr-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+    .expr-thumb {
+      width: 64px; cursor: pointer;
+      border-radius: 8px; border: 2.5px solid #e5e7eb;
+      overflow: hidden; transition: border-color 0.15s, box-shadow 0.15s;
+      background: #f9fafb; position: relative;
+    }
+    .expr-thumb:hover { border-color: #6366f1; }
+    .expr-thumb.selected { border-color: #6366f1; box-shadow: 0 0 0 3px #e0e7ff; }
+    .expr-thumb img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
+    .expr-none {
+      width: 64px; height: 64px; cursor: pointer;
+      border-radius: 8px; border: 2.5px solid #e5e7eb;
+      background: #f9fafb; display: flex; align-items: center; justify-content: center;
+      font-size: 0.7rem; font-weight: 700; color: #aaa; text-align: center;
+      transition: border-color 0.15s;
+    }
+    .expr-none:hover { border-color: #6366f1; }
+    .expr-none.selected { border-color: #6366f1; box-shadow: 0 0 0 3px #e0e7ff; color: #6366f1; }
+
     .mini-upload-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
     .mini-upload {
       border: 2px dashed #d1d5db; border-radius: 10px;
@@ -198,6 +218,11 @@
     </div>
     <div class="model-grid" id="model-grid">
       <span class="empty-models">Nenhum modelo encontrado — adicione fotos em public/models/</span>
+    </div>
+
+    <p class="section-label" style="margin-bottom:8px;">Expressão <span style="font-weight:400;text-transform:none;color:#bbb;">(opcional)</span></p>
+    <div class="expr-grid" id="expr-grid">
+      <div class="expr-none selected" id="expr-none" onclick="selectExpression(null)">Sem<br>expressão</div>
     </div>
 
     <div class="mini-upload-row">
@@ -433,6 +458,7 @@
       form.append('pose',     selectedPose);
       form.append('glasses',  modelGlassesFile);
       form.append('clothing', modelClothingFile);
+      if (selectedExpression) form.append('expressionFile', selectedExpression);
 
       const res  = await fetch('/api/generate-model', { method: 'POST', body: form });
       const data = await res.json();
@@ -467,7 +493,35 @@
     }
   }
 
+  // ── Expressões ───────────────────────────────────────────
+  let selectedExpression = null;
+
+  async function loadExpressions() {
+    const res = await fetch('/api/expressions');
+    const exprs = await res.json();
+    const grid = document.getElementById('expr-grid');
+    exprs.forEach(e => {
+      const div = document.createElement('div');
+      div.className = 'expr-thumb';
+      div.dataset.file = e.file;
+      div.innerHTML = `<img src="/expressions/${e.file}" alt="${e.name}" title="${e.name}" />`;
+      div.onclick = () => selectExpression(e.file);
+      grid.appendChild(div);
+    });
+  }
+
+  function selectExpression(file) {
+    selectedExpression = file;
+    document.querySelectorAll('.expr-thumb, .expr-none').forEach(el => el.classList.remove('selected'));
+    if (!file) {
+      document.getElementById('expr-none').classList.add('selected');
+    } else {
+      document.querySelector(`.expr-thumb[data-file="${file}"]`)?.classList.add('selected');
+    }
+  }
+
   loadModels();
+  loadExpressions();
   // ────────────────────────────────────────────────────────
 
   async function callGenerate(files, view) {

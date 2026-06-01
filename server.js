@@ -134,7 +134,7 @@ Images 2+ show the glasses model to use.
 Generate a product photo of the glasses from Images 2+ in an ANGLED/3-QUARTER VIEW (like Image 1), with soft studio lighting and shadow style as Image 1. Reproduce the glasses shape, color, and details precisely.
 IMPORTANT: the background MUST be solid #F3F4F6. No gradients, no texture, no other color.`;
 
-const PROMPT_MODEL_LADINHO = `Image 1 is the model reference photo. Image 2 shows the glasses. Image 3 shows the outfit.
+const PROMPT_MODEL_SEM_EXPRESSAO = `Image 1 is the model reference photo. Image 2 shows the glasses. Image 3 shows the outfit.
 
 Generate a professional fashion photo where the model from Image 1 is wearing the glasses from Image 2 and the clothing from Image 3.
 - Preserve the model's face, skin, and hair exactly as in Image 1
@@ -144,15 +144,18 @@ Generate a professional fashion photo where the model from Image 1 is wearing th
 - Professional studio lighting, soft and clean
 IMPORTANT: the background MUST be solid #F3F4F6. No gradients, no texture.`;
 
-const PROMPT_MODEL_FRENTE = `Image 1 is the model reference photo. Image 2 shows the glasses. Image 3 shows the outfit.
+const PROMPT_MODEL_COM_EXPRESSAO = `Image 1 is the model reference photo. Image 2 shows the glasses. Image 3 shows the outfit. Image 4 is a facial expression reference.
 
 Generate a professional fashion photo where the model from Image 1 is wearing the glasses from Image 2 and the clothing from Image 3.
 - Preserve the model's face, skin, and hair exactly as in Image 1
-- Allow only very subtle natural variation: slight micro-expression shift and minor hair strand movement — to create a natural feel
+- Replicate only the facial expression from Image 4 (mouth position, eye openness, brow shape) onto the model — do NOT copy the face, identity, skin tone or any other feature of the person in Image 4
 - Place the glasses naturally and precisely on the model's face, preserving their exact shape, color, lenses, and frame
 - Dress the model in the exact outfit shown in Image 3
 - Professional studio lighting, soft and clean
 IMPORTANT: the background MUST be solid #F3F4F6. No gradients, no texture.`;
+
+const PROMPT_MODEL_FRENTE = PROMPT_MODEL_SEM_EXPRESSAO;
+const PROMPT_MODEL_LADINHO = PROMPT_MODEL_SEM_EXPRESSAO;
 
 const PROMPT_SOMBRA = `Generate a clean professional product photo of the glasses shown in the images.
 - Glasses: front view, horizontally centered
@@ -273,6 +276,17 @@ app.get('/api/models', (req, res) => {
   res.json(Object.values(map).sort((a, b) => a.name.localeCompare(b.name)));
 });
 
+// Lista expressões disponíveis em public/expressions/
+app.get('/api/expressions', (req, res) => {
+  const dir = path.join(__dirname, 'public/expressions');
+  const exts = ['.jpg', '.jpeg', '.png', '.webp'];
+  if (!fs.existsSync(dir)) return res.json([]);
+  const files = fs.readdirSync(dir)
+    .filter(f => exts.includes(path.extname(f).toLowerCase()))
+    .map(f => ({ file: f, name: path.basename(f, path.extname(f)) }));
+  res.json(files);
+});
+
 const modelUpload = multer({ dest: 'uploads/' });
 
 app.post('/api/generate-model', modelUpload.fields([
@@ -292,21 +306,36 @@ app.post('/api/generate-model', modelUpload.fields([
     if (!fs.existsSync(modelPath))
       return res.status(400).json({ error: 'Modelo não encontrado.' });
 
+    const { expressionFile } = req.body;
     const ext = path.extname(modelFile).toLowerCase();
     const mime = ext === '.png' ? 'image/png' : 'image/jpeg';
-    const prompt = pose === 'ladinho' ? PROMPT_MODEL_LADINHO : PROMPT_MODEL_FRENTE;
 
     const modelRef    = await fileToOpenAI(modelPath,            mime,                    'model.jpg');
     const glassesRef  = await fileToOpenAI(glassesFile.path,  glassesFile.mimetype,  'glasses.jpg');
     const clothingRef = await fileToOpenAI(clothingFile.path, clothingFile.mimetype, 'clothing.jpg');
 
-    uploadedPaths.forEach(p => { try { fs.unlinkSync(p); } catch {} });
+    const images = [modelRef, glassesRef, clothingRef];
+    let prompt = pose === 'ladinho' ? PROMPT_MODEL_LADINHO : PROMPT_MODEL_FRENTE;
 
-    console.log(`[generate-model] model=${modelFile} pose=${pose}`);
+    if (expressionFile) {
+      const exprPath = path.join(__dirname, 'public/expressions', expressionFile);
+      if (fs.existsSync(exprPath)) {
+        const exprExt = path.extname(expressionFile).toLowerCase();
+        const exprMime = exprExt === '.png' ? 'image/png' : 'image/jpeg';
+        const exprRef = await fileToOpenAI(exprPath, exprMime, 'expression.jpg');
+        images.push(exprRef);
+        prompt = PROMPT_MODEL_COM_EXPRESSAO;
+        console.log(`[generate-model] model=${modelFile} pose=${pose} expression=${expressionFile}`);
+      }
+    } else {
+      console.log(`[generate-model] model=${modelFile} pose=${pose}`);
+    }
+
+    uploadedPaths.forEach(p => { try { fs.unlinkSync(p); } catch {} });
 
     const response = await client.images.edit({
       model: 'gpt-image-2',
-      image: [modelRef, glassesRef, clothingRef],
+      image: images,
       prompt,
       quality: 'medium',
     });
