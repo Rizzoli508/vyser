@@ -225,6 +225,13 @@
       <span class="empty-models">Nenhum modelo encontrado — adicione fotos em public/models/</span>
     </div>
 
+    <p class="section-label" style="margin-bottom:8px;">Acessórios <span style="font-weight:400;text-transform:none;color:#bbb;">(opcional)</span></p>
+    <div style="display:flex; gap:10px; margin-bottom:20px;">
+      <div class="model-thumb" id="thumb-bone" onclick="toggleBone()" title="Boné">
+        <img src="/accessories/bone-frente.png" alt="Boné" />
+      </div>
+    </div>
+
     <p class="section-label" style="margin-bottom:8px;">Expressão <span style="font-weight:400;text-transform:none;color:#bbb;">(opcional)</span></p>
     <div class="expr-grid" id="expr-grid">
       <div class="expr-none selected" id="expr-none" onclick="selectExpression(null)">Sem<br>expressão</div>
@@ -473,6 +480,7 @@
       form.append('glasses',  glassesSnap);
       form.append('clothing', clothingSnap);
       if (exprSnap) form.append('expressionFile', exprSnap);
+      if (boneSelected) form.append('boneSelected', 'true');
 
       const res  = await fetch('/api/generate-model', { method: 'POST', body: form });
       const data = await res.json();
@@ -490,6 +498,14 @@
       document.getElementById(`card-modelo-${n}`).innerHTML =
         `<h3>Foto com Modelo</h3><div class="card-error">❌ ${e.message}</div>`;
     }
+  }
+
+  // ── Boné ─────────────────────────────────────────────────
+  let boneSelected = false;
+
+  function toggleBone() {
+    boneSelected = !boneSelected;
+    document.getElementById('thumb-bone').classList.toggle('selected', boneSelected);
   }
 
   // ── Expressões ───────────────────────────────────────────
