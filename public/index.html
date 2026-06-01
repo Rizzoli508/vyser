@@ -168,7 +168,12 @@
 
     /* Spinner */
     .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 8px; }
+    .spinner-dark { display: inline-block; width: 28px; height: 28px; border: 3px solid #e5e7eb; border-top-color: #6366f1; border-radius: 50%; animation: spin 0.7s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Card de carregamento */
+    .loading-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; aspect-ratio: 1; background: #f9fafb; border-radius: 10px; border: 1px solid #e5e7eb; color: #999; font-size: 0.85rem; font-weight: 500; }
+    .card-error { color: #ef4444; font-size: 0.85rem; padding: 12px; text-align: center; }
   </style>
 </head>
 <body>
@@ -292,43 +297,36 @@
   async function generate() {
     if (selectedFiles.length === 0) return;
 
-    const btn = document.getElementById('btn-generate');
-    const status = document.getElementById('status');
+    // Cria linha com spinners imediatamente
+    const n = document.querySelectorAll('.result-row').length + 1;
+    const row = document.createElement('div');
+    row.className = 'result-row';
+    row.innerHTML = `
+      <div class="result-row-label">Geração ${n}</div>
+      <div class="results-grid">
+        <div class="result-card" id="card-frente-${n}"><h3>VISTA FRONTAL</h3><div class="loading-placeholder"><div class="spinner-dark"></div>Gerando...</div></div>
+        <div class="result-card" id="card-inclinado-${n}"><h3>VISTA INCLINADA</h3><div class="loading-placeholder"><div class="spinner-dark"></div>Gerando...</div></div>
+        <div class="result-card" id="card-lado-${n}"><h3>VISTA LATERAL</h3><div class="loading-placeholder"><div class="spinner-dark"></div>Gerando...</div></div>
+      </div>`;
+    document.getElementById('results-list').prepend(row);
+    row.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-    btn.disabled = true;
-    status.className = 'status';
-    status.innerHTML = '<span class="spinner"></span> Gerando frente, inclinado e lado... pode levar 30-60 segundos';
+    // Gera os 3 em paralelo, cada um preenche seu card quando terminar
+    const fill = (cardId, view, title) =>
+      callGenerate(selectedFiles, view)
+        .then(b64 => {
+          const src = 'data:image/png;base64,' + b64;
+          document.getElementById(cardId).innerHTML =
+            `<h3>${title}</h3><img src="${src}" alt="${title}" /><div class="card-actions"><a href="${src}" download="vyser-${view}-${n}.png">⬇ Baixar</a><button class="btn-retry" onclick="retrySingle(this,'${view}')">↺ Gerar de novo</button></div>`;
+        })
+        .catch(e => {
+          document.getElementById(cardId).innerHTML =
+            `<h3>${title}</h3><div class="card-error">❌ ${e.message}</div>`;
+        });
 
-    try {
-      const [frente, inclinado, lado] = await Promise.all([
-        callGenerate(selectedFiles, 'frente'),
-        callGenerate(selectedFiles, 'inclinado'),
-        callGenerate(selectedFiles, 'lado'),
-      ]);
-
-      const srcFrente    = 'data:image/png;base64,' + frente;
-      const srcInclinado = 'data:image/png;base64,' + inclinado;
-      const srcLado      = 'data:image/png;base64,' + lado;
-
-      const n = document.querySelectorAll('.result-row').length + 1;
-      const row = document.createElement('div');
-      row.className = 'result-row';
-      row.innerHTML = `
-        <div class="result-row-label">Geração ${n}</div>
-        <div class="results-grid">
-          ${makeCard(srcFrente,    'Vista Frontal',    n, 'frente')}
-          ${makeCard(srcInclinado, 'Vista Inclinada',  n, 'inclinado')}
-          ${makeCard(srcLado,      'Vista Lateral',    n, 'lado')}
-        </div>`;
-      document.getElementById('results-list').prepend(row);
-      row.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      status.textContent = '✅ Pronto!';
-    } catch (e) {
-      status.className = 'status error';
-      status.textContent = '❌ Erro: ' + e.message;
-    } finally {
-      btn.disabled = false;
-    }
+    fill(`card-frente-${n}`,    'frente',    'VISTA FRONTAL');
+    fill(`card-inclinado-${n}`, 'inclinado', 'VISTA INCLINADA');
+    fill(`card-lado-${n}`,      'lado',      'VISTA LATERAL');
   }
 
   function makeCard(src, title, n, view) {
@@ -445,51 +443,52 @@
   }
 
   async function gerarComModelo() {
-    const btn    = document.getElementById('btn-model');
-    const status = document.getElementById('status-model');
-    btn.disabled = true;
-    status.className = 'status';
-    status.innerHTML = '<span class="spinner"></span> Gerando foto com modelo... pode levar 30-60s';
+    const modelFile = selectedPose === 'ladinho' ? selectedModel.ladinho : selectedModel.frente;
+    const label = `${selectedModel.name} (${selectedPose})${selectedExpression ? ' + expressão' : ''}`;
+    const n = document.querySelectorAll('.result-row, .result-single').length + 1;
+
+    // Cria card com spinner imediatamente
+    const wrap = document.createElement('div');
+    wrap.className = 'result-single';
+    wrap.innerHTML = `
+      <div class="result-row-label">Modelo — ${label}</div>
+      <div class="results-grid results-grid--single">
+        <div class="result-card" id="card-modelo-${n}">
+          <h3>Foto com Modelo</h3>
+          <div class="loading-placeholder"><div class="spinner-dark"></div>Gerando...</div>
+        </div>
+      </div>`;
+    document.getElementById('results-list').prepend(wrap);
+    wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    // Captura valores atuais (podem mudar antes de terminar)
+    const glassesSnap  = modelGlassesFile;
+    const clothingSnap = modelClothingFile;
+    const exprSnap     = selectedExpression;
 
     try {
-      const modelFile = selectedPose === 'ladinho' ? selectedModel.ladinho : selectedModel.frente;
       const form = new FormData();
       form.append('modelFile', modelFile);
       form.append('pose',     selectedPose);
-      form.append('glasses',  modelGlassesFile);
-      form.append('clothing', modelClothingFile);
-      if (selectedExpression) form.append('expressionFile', selectedExpression);
+      form.append('glasses',  glassesSnap);
+      form.append('clothing', clothingSnap);
+      if (exprSnap) form.append('expressionFile', exprSnap);
 
       const res  = await fetch('/api/generate-model', { method: 'POST', body: form });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
 
       const src = 'data:image/png;base64,' + data.image;
-      const n   = document.querySelectorAll('.result-row, .result-single').length + 1;
-
-      const wrap = document.createElement('div');
-      wrap.className = 'result-single';
-      wrap.innerHTML = `
-        <div class="result-row-label">Modelo — ${selectedModel.name} (${selectedPose})</div>
-        <div class="results-grid results-grid--single">
-          <div class="result-card">
-            <h3>Foto com Modelo</h3>
-            <img src="${src}" alt="Modelo ${n}" />
-            <div class="card-actions">
-              <a href="${src}" download="vyser-modelo-${n}.png">⬇ Baixar</a>
-              <button class="btn-retry" onclick="gerarComModelo()">↺ Gerar de novo</button>
-            </div>
-          </div>
+      document.getElementById(`card-modelo-${n}`).innerHTML = `
+        <h3>Foto com Modelo</h3>
+        <img src="${src}" alt="Modelo ${n}" />
+        <div class="card-actions">
+          <a href="${src}" download="vyser-modelo-${n}.png">⬇ Baixar</a>
+          <button class="btn-retry" onclick="gerarComModelo()">↺ Gerar de novo</button>
         </div>`;
-      document.getElementById('results-list').prepend(wrap);
-      wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      status.textContent = '✅ Pronto!';
     } catch(e) {
-      status.className = 'status error';
-      status.textContent = '❌ Erro: ' + e.message;
-    } finally {
-      btn.disabled = false;
-      updateModelBtn();
+      document.getElementById(`card-modelo-${n}`).innerHTML =
+        `<h3>Foto com Modelo</h3><div class="card-error">❌ ${e.message}</div>`;
     }
   }
 
