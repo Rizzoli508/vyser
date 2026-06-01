@@ -375,10 +375,10 @@
     grid.innerHTML = '';
     allModels.forEach(m => {
       const hasFile = selectedPose === 'ladinho' ? !!m.ladinho : !!m.frente;
-      const previewFile = m.frente || m.ladinho;
+      const previewFile = (selectedPose === 'ladinho' && m.ladinho) ? m.ladinho : (m.frente || m.ladinho);
       const div = document.createElement('div');
       div.className = 'model-thumb' + (!hasFile ? ' no-pose' : '');
-      div.innerHTML = `<img src="/models/${previewFile}" alt="${m.name}" /><span>${m.name}</span>`;
+      div.innerHTML = `<img src="/models/${previewFile}" alt="${m.name}" />`;
       if (hasFile) {
         div.onclick = () => {
           document.querySelectorAll('.model-thumb').forEach(el => el.classList.remove('selected'));
