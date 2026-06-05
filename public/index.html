@@ -170,6 +170,37 @@
     .mini-upload .change-hint { font-size: 0.72rem; color: #16a34a; margin-top: 4px; }
     .mini-upload:hover .change-hint { color: #6366f1; }
 
+    /* Multi-upload óculos */
+    .glasses-upload-area {
+      border: 2px dashed #d1d5db; border-radius: 10px;
+      padding: 12px 10px; text-align: center; cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      font-size: 0.82rem; color: #888; font-weight: 500;
+    }
+    .glasses-upload-area:hover { border-color: #6366f1; background: #f5f3ff; color: #6366f1; }
+    .glasses-upload-area.has-files { border-color: #22c55e; border-style: solid; }
+    .glasses-thumbs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .glasses-thumb {
+      position: relative; width: 56px; height: 56px;
+      border-radius: 6px; overflow: hidden; border: 1.5px solid #e5e7eb;
+      flex-shrink: 0;
+    }
+    .glasses-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .glasses-thumb button {
+      position: absolute; top: 1px; right: 1px;
+      background: rgba(0,0,0,0.55); color: #fff;
+      border: none; border-radius: 50%; width: 16px; height: 16px;
+      font-size: 9px; cursor: pointer; line-height: 16px; padding: 0;
+    }
+    .glasses-add-btn {
+      width: 56px; height: 56px; border-radius: 6px;
+      border: 1.5px dashed #d1d5db; background: #f9fafb;
+      color: #aaa; font-size: 1.2rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; transition: border-color 0.15s, color 0.15s;
+    }
+    .glasses-add-btn:hover { border-color: #6366f1; color: #6366f1; }
+
     /* Spinner */
     .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 8px; }
     .spinner-dark { display: inline-block; width: 28px; height: 28px; border: 3px solid #e5e7eb; border-top-color: #6366f1; border-radius: 50%; animation: spin 0.7s linear infinite; }
@@ -243,11 +274,12 @@
 
     <div class="mini-upload-row">
       <div>
-        <p class="section-label">Óculos</p>
-        <div class="mini-upload" id="upload-glasses" onclick="document.getElementById('input-glasses').click()">
-          <input type="file" id="input-glasses" accept="image/*" onchange="handleModelFile('glasses', this.files[0])" />
-          📎 Anexar foto dos óculos
+        <p class="section-label">Óculos <span style="font-weight:400;text-transform:none;color:#bbb;">(até 5 fotos)</span></p>
+        <input type="file" id="input-glasses" accept="image/*" multiple style="display:none" onchange="handleGlassesFiles(this.files)" />
+        <div class="glasses-upload-area" id="upload-glasses-area" onclick="document.getElementById('input-glasses').click()">
+          📎 Anexar foto(s) dos óculos
         </div>
+        <div class="glasses-thumbs" id="glasses-thumbs"></div>
       </div>
       <div>
         <p class="section-label">Roupa</p>
@@ -383,7 +415,7 @@
   // ── Seção Gerar com Modelo ──────────────────────────────
   let selectedModel     = null; // objeto { name, frente, ladinho }
   let selectedPose      = 'frente';
-  let modelGlassesFile  = null;
+  let modelGlassesFiles = []; // array — suporta 1 a 5 fotos
   let modelClothingFile = null;
   let allModels         = [];
 
@@ -429,21 +461,72 @@
     });
   }
 
+  function handleGlassesFiles(files) {
+    for (const f of files) {
+      if (modelGlassesFiles.length >= 5) break;
+      modelGlassesFiles.push(f);
+    }
+    renderGlassesThumbs();
+    updateModelBtn();
+  }
+
+  function renderGlassesThumbs() {
+    const area = document.getElementById('upload-glasses-area');
+    const thumbsEl = document.getElementById('glasses-thumbs');
+    thumbsEl.innerHTML = '';
+
+    if (modelGlassesFiles.length === 0) {
+      area.classList.remove('has-files');
+      area.style.display = '';
+      return;
+    }
+
+    area.classList.add('has-files');
+    area.style.display = 'none';
+
+    modelGlassesFiles.forEach((f, i) => {
+      const div = document.createElement('div');
+      div.className = 'glasses-thumb';
+      const img = document.createElement('img');
+      img.src = URL.createObjectURL(f);
+      const btn = document.createElement('button');
+      btn.textContent = '×';
+      btn.title = 'Remover';
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        modelGlassesFiles.splice(i, 1);
+        renderGlassesThumbs();
+        updateModelBtn();
+      };
+      div.appendChild(img);
+      div.appendChild(btn);
+      thumbsEl.appendChild(div);
+    });
+
+    // Botão + para adicionar mais (até 5)
+    if (modelGlassesFiles.length < 5) {
+      const addBtn = document.createElement('div');
+      addBtn.className = 'glasses-add-btn';
+      addBtn.title = 'Adicionar mais fotos';
+      addBtn.textContent = '+';
+      addBtn.onclick = () => document.getElementById('input-glasses').click();
+      thumbsEl.appendChild(addBtn);
+    }
+  }
+
   function handleModelFile(type, file) {
     if (!file) return;
-    const id = type === 'glasses' ? 'upload-glasses' : 'upload-clothing';
-    const inputId = type === 'glasses' ? 'input-glasses' : 'input-clothing';
-    if (type === 'glasses') modelGlassesFile = file;
-    else modelClothingFile = file;
+    const id = type === 'upload-clothing';
+    modelClothingFile = file;
 
-    const el = document.getElementById(id);
+    const el = document.getElementById('upload-clothing');
     el.classList.add('has-file');
     const src = URL.createObjectURL(file);
     el.innerHTML = `
-      <input type="file" id="${inputId}" accept="image/*" onchange="handleModelFile('${type}', this.files[0])" style="display:none" />
+      <input type="file" id="input-clothing" accept="image/*" onchange="handleModelFile('clothing', this.files[0])" style="display:none" />
       <img class="preview-img" src="${src}" />
       <div class="change-hint">🔄 Clique para trocar</div>`;
-    el.onclick = () => document.getElementById(inputId).click();
+    el.onclick = () => document.getElementById('input-clothing').click();
     updateModelBtn();
   }
 
@@ -452,7 +535,7 @@
       ? (selectedPose === 'ladinho' ? selectedModel.ladinho : selectedModel.frente)
       : null;
     document.getElementById('btn-model').disabled =
-      !(modelFile && modelGlassesFile && modelClothingFile);
+      !(modelFile && modelGlassesFiles.length > 0 && modelClothingFile);
   }
 
   async function gerarComModelo() {
@@ -475,7 +558,7 @@
     wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
     // Captura valores atuais (podem mudar antes de terminar)
-    const glassesSnap  = modelGlassesFile;
+    const glassesSnap  = [...modelGlassesFiles];
     const clothingSnap = modelClothingFile;
     const exprSnap     = selectedExpression;
 
@@ -483,7 +566,7 @@
       const form = new FormData();
       form.append('modelFile', modelFile);
       form.append('pose',     selectedPose);
-      form.append('glasses',  glassesSnap);
+      glassesSnap.forEach(f => form.append('glasses', f));
       form.append('clothing', clothingSnap);
       if (exprSnap) form.append('expressionFile', exprSnap);
       if (boneSelected) form.append('boneSelected', 'true');

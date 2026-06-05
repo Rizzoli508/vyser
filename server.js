@@ -135,16 +135,21 @@ Generate a product photo of the glasses from Images 2+ in an ANGLED/3-QUARTER VI
 IMPORTANT: the background MUST be solid #F3F4F6. No gradients, no texture, no other color.`;
 
 // Monta prompt dinamicamente conforme os extras selecionados
-function buildModelPrompt(expressionIdx, boneStartIdx) {
-  const lines = [
-    `Image 1 is the model reference photo. Image 2 shows the glasses. Image 3 shows the outfit.`
-  ];
+function buildModelPrompt(glassesCount, outfitIdx, expressionIdx, boneStartIdx) {
+  // Monta descrição dos índices de óculos (2 a 1+glassesCount)
+  const glassesStart = 2;
+  const glassesEnd   = 1 + glassesCount;
+  const glassesRef   = glassesCount === 1
+    ? `Image ${glassesStart} shows the glasses`
+    : `Images ${glassesStart} to ${glassesEnd} show the glasses from different angles — use all of them as reference to understand the exact shape, color, lenses, and frame`;
 
-  if (expressionIdx) lines[0] += ` Image ${expressionIdx} is a facial expression reference.`;
-  if (boneStartIdx)  lines[0] += ` Images ${boneStartIdx} and ${boneStartIdx + 1} show the cap from the front and side — use both to understand its full shape.`;
+  const header = [`Image 1 is the model reference photo. ${glassesRef}. Image ${outfitIdx} shows the outfit.`];
+  if (expressionIdx) header[0] += ` Image ${expressionIdx} is a facial expression reference.`;
+  if (boneStartIdx)  header[0] += ` Images ${boneStartIdx} and ${boneStartIdx + 1} show the cap from the front and side — use both to understand its full shape.`;
 
-  lines.push('');
-  lines.push('Generate a professional fashion photo where the model from Image 1 is wearing the glasses from Image 2 and the clothing from Image 3.');
+  const lines = [...header, ''];
+
+  lines.push(`Generate a professional fashion photo where the model from Image 1 is wearing the glasses from ${glassesCount === 1 ? `Image ${glassesStart}` : `Images ${glassesStart}-${glassesEnd}`} and the clothing from Image ${outfitIdx}.`);
   lines.push('- Preserve the model\'s face, skin, and hair exactly as in Image 1');
   lines.push('- Allow only very subtle natural variation: slight micro-expression shift and minor hair strand movement — to create a natural feel');
 
@@ -152,8 +157,8 @@ function buildModelPrompt(expressionIdx, boneStartIdx) {
     lines.push(`- Replicate only the facial expression from Image ${expressionIdx} (mouth position, eye openness, brow shape) onto the model — do NOT copy the face, identity, skin tone or any other feature of the person in Image ${expressionIdx}`);
   }
 
-  lines.push('- Place the glasses naturally and precisely on the model\'s face, preserving their exact shape, color, lenses, and frame');
-  lines.push('- Dress the model in the exact outfit shown in Image 3');
+  lines.push(`- Place the glasses naturally and precisely on the model\'s face, preserving their exact shape, color, lenses, and frame${glassesCount > 1 ? ' — cross-reference all glasses images to get the details right' : ''}`);
+  lines.push(`- Dress the model in the exact outfit shown in Image ${outfitIdx}`);
 
   if (boneStartIdx) {
     lines.push(`- Place the cap shown in Images ${boneStartIdx} and ${boneStartIdx + 1} naturally on the model\'s head, fitting the pose and angle — preserve its exact shape, color, and details`);
@@ -298,17 +303,17 @@ app.get('/api/expressions', (req, res) => {
 const modelUpload = multer({ dest: 'uploads/' });
 
 app.post('/api/generate-model', modelUpload.fields([
-  { name: 'glasses', maxCount: 1 },
+  { name: 'glasses', maxCount: 5 },
   { name: 'clothing', maxCount: 1 },
 ]), async (req, res) => {
-  const glassesFile  = req.files?.['glasses']?.[0];
+  const glassesFiles = req.files?.['glasses'] || [];
   const clothingFile = req.files?.['clothing']?.[0];
-  const uploadedPaths = [glassesFile?.path, clothingFile?.path].filter(Boolean);
+  const uploadedPaths = [...glassesFiles.map(f => f.path), clothingFile?.path].filter(Boolean);
   try {
     const { modelFile, pose } = req.body;
-    if (!glassesFile)  return res.status(400).json({ error: 'Envie a foto dos óculos.' });
-    if (!clothingFile) return res.status(400).json({ error: 'Envie a foto da roupa.' });
-    if (!modelFile)    return res.status(400).json({ error: 'Selecione um modelo.' });
+    if (!glassesFiles.length) return res.status(400).json({ error: 'Envie ao menos uma foto dos óculos.' });
+    if (!clothingFile)        return res.status(400).json({ error: 'Envie a foto da roupa.' });
+    if (!modelFile)           return res.status(400).json({ error: 'Selecione um modelo.' });
 
     const modelPath = path.join(__dirname, 'public/models', modelFile);
     if (!fs.existsSync(modelPath))
@@ -318,37 +323,47 @@ app.post('/api/generate-model', modelUpload.fields([
     const ext = path.extname(modelFile).toLowerCase();
     const mime = ext === '.png' ? 'image/png' : 'image/jpeg';
 
-    const modelRef    = await fileToOpenAI(modelPath,           mime,                   'model.jpg');
-    const glassesRef  = await fileToOpenAI(glassesFile.path,  glassesFile.mimetype,  'glasses.jpg');
-    const clothingRef = await fileToOpenAI(clothingFile.path, clothingFile.mimetype, 'clothing.jpg');
+    // Image 1: modelo
+    const modelRef = await fileToOpenAI(modelPath, mime, 'model.jpg');
+    const images = [modelRef];
 
-    const images = [modelRef, glassesRef, clothingRef]; // 1, 2, 3
+    // Images 2 a N+1: óculos (1 ou mais)
+    for (let i = 0; i < glassesFiles.length; i++) {
+      images.push(await fileToOpenAI(glassesFiles[i].path, glassesFiles[i].mimetype, `glasses-${i+1}.jpg`));
+    }
+    const glassesEndIdx = images.length; // índice da última imagem de óculos
+
+    // Image N+2: roupa
+    const clothingRef = await fileToOpenAI(clothingFile.path, clothingFile.mimetype, 'clothing.jpg');
+    images.push(clothingRef);
+    const outfitIdx = images.length;
+
     let expressionIdx = null;
     let boneStartIdx  = null;
 
-    // Image 4: expressão (opcional)
+    // Expressão (opcional)
     if (expressionFile) {
       const exprPath = path.join(__dirname, 'public/expressions', expressionFile);
       if (fs.existsSync(exprPath)) {
         const exprMime = path.extname(expressionFile).toLowerCase() === '.png' ? 'image/png' : 'image/jpeg';
         images.push(await fileToOpenAI(exprPath, exprMime, 'expression.jpg'));
-        expressionIdx = images.length; // posição atual
+        expressionIdx = images.length;
       }
     }
 
-    // Próximas 2 imagens: boné frente + lado (opcional)
+    // Boné (opcional)
     if (boneSelected === 'true') {
       const boneFrente = path.join(__dirname, 'public/accessories/bone-frente.png');
       const boneLado   = path.join(__dirname, 'public/accessories/bone-lado.png');
       if (fs.existsSync(boneFrente) && fs.existsSync(boneLado)) {
         images.push(await fileToOpenAI(boneFrente, 'image/png', 'bone-frente.png'));
-        boneStartIdx = images.length; // índice do primeiro boné
+        boneStartIdx = images.length;
         images.push(await fileToOpenAI(boneLado,   'image/png', 'bone-lado.png'));
       }
     }
 
-    const prompt = buildModelPrompt(expressionIdx, boneStartIdx);
-    console.log(`[generate-model] model=${modelFile} pose=${pose} expr=${!!expressionFile} bone=${boneSelected}`);
+    const prompt = buildModelPrompt(glassesFiles.length, outfitIdx, expressionIdx, boneStartIdx);
+    console.log(`[generate-model] model=${modelFile} pose=${pose} glasses=${glassesFiles.length} expr=${!!expressionFile} bone=${boneSelected}`);
 
     uploadedPaths.forEach(p => { try { fs.unlinkSync(p); } catch {} });
 
